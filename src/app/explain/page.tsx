@@ -1,49 +1,39 @@
-// frontend/src/app/explain/page.tsx
+// e.g., src/app/explain/page.tsx (client component)
 "use client";
 import { useState } from "react";
-
-type Aspect = { aspect: string; sentiment: number; confidence: number };
+import { postJSON } from "@/lib/api";
 
 export default function ExplainPage() {
   const [text, setText] = useState("");
-  const [aspects, setAspects] = useState<Aspect[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [resp, setResp] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  async function run() {
-    setLoading(true);
-    setAspects([]);
-    const r = await fetch("/api/explain-review", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    const data = await r.json();
-    setAspects(data.aspects ?? []);
-    setLoading(false);
+  async function runExplain(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setResp(null);
+    try {
+      const data = await postJSON("/api/explain-review", { text });
+      setResp(data);
+    } catch (e: any) {
+      setErr(e.message);
+    }
   }
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Explain (ABSA)</h1>
-      <textarea className="w-full border rounded p-3" rows={4}
-        placeholder="The camera is amazing but the speaker crackles and it overheats"
-        value={text} onChange={e=>setText(e.target.value)} />
-      <button onClick={run} className="px-4 py-2 rounded bg-black text-white">
-        {loading ? "Explaining..." : "Explain"}
-      </button>
+    <main className="p-6 max-w-3xl mx-auto">
+      <form onSubmit={runExplain} className="flex flex-col gap-2">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Paste a review…"
+          className="border px-3 py-2 rounded w-full h-32"
+        />
+        <button className="px-4 py-2 rounded bg-black text-white w-fit">Explain</button>
+      </form>
 
-      {aspects.length > 0 && (
-        <div className="rounded border bg-white">
-          {aspects.map((a, i) => (
-            <div key={i} className="flex items-center justify-between px-4 py-2 border-b last:border-b-0">
-              <div className="font-medium">{a.aspect}</div>
-              <div className="text-sm">
-                {a.sentiment.toFixed(2)} ({a.sentiment > 0 ? "positive" : "negative"})
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+      {err && <pre className="mt-4 text-red-600 text-sm whitespace-pre-wrap">{err}</pre>}
+      {resp && <pre className="mt-4 text-xs bg-gray-50 border p-3 rounded">{JSON.stringify(resp, null, 2)}</pre>}
+    </main>
   );
 }

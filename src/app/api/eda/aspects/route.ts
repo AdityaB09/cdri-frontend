@@ -1,8 +1,15 @@
 import { BACKEND_URL } from "@/lib/config";
+
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const r = await fetch(`${BACKEND_URL}/eda/aspects`, { cache: "no-store" });
-  const data = await r.json();
-  return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
+  const r = await fetch(`${BACKEND_URL}/eda/aspects`, {
+    method: "GET",
+    cache: "no-store",
+  });
+  const txt = await r.text();
+  return new Response(txt, {
+    status: r.status,
+    headers: { "Content-Type": r.headers.get("Content-Type") || "application/json" },
+  });
 }
