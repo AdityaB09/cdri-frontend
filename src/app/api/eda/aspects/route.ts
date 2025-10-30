@@ -1,6 +1,6 @@
 // src/app/api/eda/aspects/route.ts
 import { NextResponse } from "next/server";
-import { API_BASE } from "@/src/lib/config";
+import { API_BASE } from "@/lib/config";
 
 export async function GET() {
   try {
