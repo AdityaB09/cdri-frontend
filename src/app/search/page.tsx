@@ -1,42 +1,49 @@
-// src/app/search/page.tsx
 "use client";
 
 import React, { useState } from "react";
+import ReviewCard from "@/components/ReviewCard";
+import SimilarPanel from "@/components/SimilarPanel";
 
-type SearchHit = {
-  id?: number | string;
+type Hit = {
+  id?: string|number;
   product?: string;
   domain?: string;
-  text?: string;      // fallback name used by your older minimal endpoint
-  reviewText?: string; // alternate field name
+  text?: string;
+  reviewText?: string;
   score: number;
+  // optional: aspects on the hit for SimilarPanel seeding
+  aspects?: { aspect: string; sentiment?: number }[];
 };
 
 export default function SearchPage() {
   const [q, setQ] = useState("");
-  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [hits, setHits] = useState<Hit[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const onSearch = async () => {
+  async function onSearch() {
     setErr(null); setLoading(true);
     try {
       const r = await fetch("/api/search", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query: q, k: 10 }),
+        body: JSON.stringify({ query: q, k: 10 })
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data?.error || "search failed");
-      // adapt array or {results:[...]}
-      const results: SearchHit[] = Array.isArray(data) ? data : data.results ?? data.hits ?? [];
-      setHits(results);
+      const list: Hit[] = Array.isArray(data) ? data : data.hits ?? data.results ?? [];
+      setHits(list);
     } catch (e: any) {
       setErr(e.message ?? "search error");
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  // create simple expansions for SimilarPanel
+  const expansions = (hits[0]?.aspects || [])
+    .slice(0, 5)
+    .map(a => a.aspect);
 
   return (
     <div className="p-6 space-y-6">
@@ -45,14 +52,13 @@ export default function SearchPage() {
       <div className="flex gap-2">
         <input
           className="w-full rounded border px-3 py-2"
-          placeholder="camera, battery life, speaker…"
+          placeholder="battery life, speakers, camera…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
         <button
-          onClick={onSearch}
           className="rounded bg-black px-4 py-2 text-white"
-          disabled={loading}
+          onClick={onSearch} disabled={loading}
         >
           {loading ? "Searching…" : "Search"}
         </button>
@@ -60,20 +66,31 @@ export default function SearchPage() {
 
       {err && <div className="text-red-600">{err}</div>}
 
-      <div className="space-y-3">
+      {expansions.length > 0 && (
+        <div className="rounded border p-4">
+          <SimilarPanel
+            title="Explore related aspects"
+            items={expansions.map(s => ({ label: s }))}
+            onClick={(label: string) => { setQ(label); onSearch(); }}
+          />
+        </div>
+      )}
+
+      <div className="grid gap-3">
         {hits.map((h, i) => (
-          <div key={i} className="rounded border p-4">
-            <div className="text-sm text-neutral-500">
-              {(h.domain || "domain") + " • " + (h.product || "product")}
-            </div>
-            <div className="mt-1 text-[15px]">
-              {h.reviewText || h.text || "(no text)"}
-            </div>
-            <div className="mt-2 text-xs text-neutral-600">score: {h.score.toFixed(3)}</div>
-          </div>
+          <ReviewCard
+            key={h.id ?? i}
+            product={h.product ?? "—"}
+            domain={h.domain ?? "—"}
+            text={h.reviewText ?? h.text ?? "(no text)"}
+            relevance={Math.max(0, Math.min(1, h.score))} // 0..1 bar
+          />
         ))}
-        {!loading && hits.length === 0 && <div className="text-neutral-500">No results yet.</div>}
       </div>
+
+      {!loading && !err && hits.length === 0 && (
+        <div className="text-neutral-500">No results yet. Try a common term (e.g., “camera”, “battery”).</div>
+      )}
     </div>
   );
 }
