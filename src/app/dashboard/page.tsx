@@ -1,27 +1,41 @@
+// src/app/dashboard/page.tsx
 "use client";
-import { useEffect, useState } from "react";
-import { apiMetrics, apiHealth, type MetricsRes } from "@/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // your card.tsx file
+import React, { useEffect, useState } from "react";
 
 export default function DashboardPage() {
-  const [m, setM] = useState<MetricsRes | null>(null);
-  const [status, setStatus] = useState<string>("…");
+  const [data, setData] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    apiMetrics().then(setM).catch(() => setM(null));
-    apiHealth().then(r => setStatus(r.status)).catch(() => setStatus("down"));
+    (async () => {
+      try {
+        const r = await fetch("/api/metrics-overview", { cache: "no-store" });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d?.error || "metrics failed");
+        setData(d);
+      } catch (e: any) {
+        setErr(e.message ?? "metrics error");
+      }
+    })();
   }, []);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card><CardHeader><CardTitle>Backend</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl">{status}</div></CardContent></Card>
-        <Card><CardHeader><CardTitle>Total Reviews</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl">{m?.total_reviews ?? 0}</div></CardContent></Card>
-        <Card><CardHeader><CardTitle>Products</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl">{m?.total_products ?? 0}</div></CardContent></Card>
+    <div className="p-6 space-y-6">
+      <h1 className="text-3xl font-bold">Dashboard</h1>
+      {err && <div className="text-red-600">{err}</div>}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded border p-4">
+          <div className="text-sm text-neutral-600">Backend</div>
+          <div className="text-xl">{data?.backend ?? "unknown"}</div>
+        </div>
+        <div className="rounded border p-4">
+          <div className="text-sm text-neutral-600">Total Reviews</div>
+          <div className="text-2xl">{data?.total_reviews ?? 0}</div>
+        </div>
+        <div className="rounded border p-4">
+          <div className="text-sm text-neutral-600">Products</div>
+          <div className="text-2xl">{data?.products ?? 0}</div>
+        </div>
       </div>
     </div>
   );
