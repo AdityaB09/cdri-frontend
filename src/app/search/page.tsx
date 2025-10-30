@@ -51,7 +51,7 @@ export default function SearchPage() {
             <ReviewCard key={i} text={h.text} score={h.score} />
           ))}
         </div>
-        <SimilarPanel hits={hits} />
+        <SimilarPanel items={hits} />
       </div>
     </div>
   );
