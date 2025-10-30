@@ -1,15 +1,42 @@
 // src/app/api/metrics-overview/route.ts
 import { NextResponse } from "next/server";
-import { API_BASE } from "@/lib/config";
+
+const BASE = "https://cdri-backend.onrender.com"
 
 export async function GET() {
-  try {
-    const url = `${API_BASE || ""}/metrics/overview`;
-    const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) throw new Error(`Backend ${r.status}`);
-    const data = await r.json();
-    return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  if (!BASE) {
+    return NextResponse.json({ error: "BACKEND env not set" }, { status: 500 });
   }
+
+  const tryFetch = async (path: string) => {
+    try {
+      const r = await fetch(`${BASE}${path}`, { cache: "no-store" });
+      if (!r.ok) return { ok: false as const, status: r.status, data: null as any };
+      const data = await r.json();
+      return { ok: true as const, status: 200, data };
+    } catch (e) {
+      return { ok: false as const, status: 500, data: null as any };
+    }
+  };
+
+  // Primary: /admin/stats (your backend has this)
+  let res = await tryFetch("/admin/stats");
+
+  // Fallback: older naming
+  if (!res.ok) res = await tryFetch("/metrics/overview");
+
+  if (!res.ok) {
+    return NextResponse.json({ error: "metrics not found" }, { status: 404 });
+  }
+
+  // Normalize a simple shape used by your UI (tolerates both schemas)
+  const d = res.data || {};
+  const payload = {
+    backend: d.backend ?? d.service ?? "unknown",
+    total_reviews: d.total_reviews ?? d.count ?? 0,
+    products: d.products ?? d.num_products ?? 0,
+    // pass-through raw for advanced cards if you want
+    raw: d,
+  };
+  return NextResponse.json(payload);
 }
