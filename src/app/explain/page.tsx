@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { API_BASE } from "../api";
+import { API_BASE } from "@/lib/config";
 import TokenAttributions from "@/components/TokenAttributions";
 import AspectTable from "@/components/AspectTable";
 

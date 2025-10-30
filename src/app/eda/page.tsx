@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { API_BASE } from "../api";
+import { API_BASE } from "@/lib/config";
 import EDAChartBubble, { BubbleDatum } from "@/components/EDAChartBubble";
 import EDAChartPainPoints, { PainPointDatum } from "@/components/EDAChartPainPoints";
 import AspectTable from "@/components/AspectTable";
