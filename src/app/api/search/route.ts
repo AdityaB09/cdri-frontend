@@ -1,4 +1,4 @@
-import { NEXT_PUBLIC_API_BASE } from "@/lib/config";
+import { API_BASE } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   try {
     // Expect { query: string }
     const payload = await req.json(); // <— IMPORTANT: read JSON, not text
-    const r = await fetch(`${NEXT_PUBLIC_API_BASE}/search`, {
+    const r = await fetch(`${API_BASE}/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

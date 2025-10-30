@@ -1,9 +1,9 @@
-import { NEXT_PUBLIC_API_BASE } from "@/lib/config";
+import { API_BASE } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const r = await fetch(`${NEXT_PUBLIC_API_BASE}/metrics/overview`, {
+  const r = await fetch(`${API_BASE}/metrics/overview`, {
     method: "GET",
     cache: "no-store",
   });

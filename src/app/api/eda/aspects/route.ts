@@ -1,9 +1,9 @@
-import {  NEXT_PUBLIC_API_BASE} from "@/lib/config";
+import {API_BASE} from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const r = await fetch(`${NEXT_PUBLIC_API_BASE}/eda/aspects`, {
+  const r = await fetch(`${API_BASE}/eda/aspects`, {
     method: "GET",
     cache: "no-store",
   });
