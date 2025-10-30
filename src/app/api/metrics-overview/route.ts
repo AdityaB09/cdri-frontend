@@ -1,42 +1,57 @@
 // src/app/api/metrics-overview/route.ts
 import { NextResponse } from "next/server";
 
-const BASE = "https://cdri-backend.onrender.com"
+const BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+
+async function getJSON(path: string) {
+  const r = await fetch(`${BASE}${path}`, { cache: "no-store" });
+  if (!r.ok) return { ok: false as const, status: r.status, data: null as any };
+  return { ok: true as const, status: 200, data: await r.json() };
+}
 
 export async function GET() {
   if (!BASE) {
-    return NextResponse.json({ error: "BACKEND env not set" }, { status: 500 });
+    return NextResponse.json(
+      { error: "NEXT_PUBLIC_BACKEND_URL not set" },
+      { status: 500 }
+    );
   }
 
-  const tryFetch = async (path: string) => {
-    try {
-      const r = await fetch(`${BASE}${path}`, { cache: "no-store" });
-      if (!r.ok) return { ok: false as const, status: r.status, data: null as any };
-      const data = await r.json();
-      return { ok: true as const, status: 200, data };
-    } catch (e) {
-      return { ok: false as const, status: 500, data: null as any };
-    }
-  };
-
-  // Primary: /admin/stats (your backend has this)
-  let res = await tryFetch("/admin/stats");
-
-  // Fallback: older naming
-  if (!res.ok) res = await tryFetch("/metrics/overview");
-
-  if (!res.ok) {
-    return NextResponse.json({ error: "metrics not found" }, { status: 404 });
+  // 1) Try a modern stats route if present
+  const tryStats = await getJSON("/admin/stats"); // many of your images had this
+  if (tryStats.ok) {
+    const d = tryStats.data || {};
+    return NextResponse.json({
+      backend: d.backend ?? "up",
+      total_reviews: d.total_reviews ?? 0,
+      products: d.products ?? 0,
+      ok: true,
+      synthesized: false,
+    });
   }
 
-  // Normalize a simple shape used by your UI (tolerates both schemas)
-  const d = res.data || {};
-  const payload = {
-    backend: d.backend ?? d.service ?? "unknown",
-    total_reviews: d.total_reviews ?? d.count ?? 0,
-    products: d.products ?? d.num_products ?? 0,
-    // pass-through raw for advanced cards if you want
-    raw: d,
-  };
-  return NextResponse.json(payload);
+  // 2) Synthesize from health and lightweight probes (no /metrics/overview calls)
+  const health = await getJSON("/health");
+  // cheap probes to endpoints you *do* have, purely to confirm they return 200
+  const eda = await getJSON("/eda/aspects");
+  const searchProbe = await fetch(`${BASE}/search`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query: "test", k: 1 }),
+    cache: "no-store",
+  }).then(async r => ({ ok: r.ok, status: r.status }));
+
+  const anyUp = health.ok || eda.ok || searchProbe.ok;
+  return NextResponse.json({
+    backend: anyUp ? "up" : "down",
+    total_reviews: 0,        // unknown without /admin/stats
+    products: 0,             // unknown without /admin/stats
+    ok: anyUp,
+    synthesized: true,
+    checks: {
+      health: health.ok ? 200 : health.status,
+      eda: eda.ok ? 200 : eda.status,
+      search: searchProbe.ok ? 200 : searchProbe.status,
+    },
+  });
 }

@@ -3,180 +3,206 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar, CartesianGrid
 } from "recharts";
 
-type PingSample = { t: string; ms: number; ok: boolean };
+type Overview = {
+  backend: string;           // "up"/"down"/"unknown"
+  total_reviews: number;
+  products: number;
+  ok: boolean;
+  synthesized: boolean;
+  checks?: { health: number; eda: number; search: number };
+};
 
-const ENDPOINTS = [
-  { key: "metrics", label: "metrics-overview", method: "GET", url: "/api/metrics-overview", body: null },
-  { key: "aspects", label: "eda/aspects",      method: "GET", url: "/api/eda/aspects",       body: null },
-  { key: "search",  label: "search",            method: "POST", url: "/api/search",            body: JSON.stringify({ query: "camera", k: 1 }) },
-];
+type PingSample = {
+  t: string;        // hh:mm:ss
+  ms: number;       // latency
+  ok: boolean;
+};
+
+const OK = "#10b981";     // emerald-500
+const BAD = "#ef4444";    // red-500
+const NEU = "#111827";    // gray-900
 
 export default function DashboardPage() {
-  const [series, setSeries] = useState<PingSample[]>([]);
-  const good = useRef(0);
-  const bad = useRef(0);
-  const [bench, setBench] = useState<{ key: string; label: string; ms: number; ok: boolean }[]>([]);
+  const [ov, setOv] = useState<Overview | null>(null);
+  const [endpoint, setEndpoint] = useState<{ name: string; ms: number; ok: boolean }[]>([]);
+  const [samples, setSamples] = useState<PingSample[]>([]);
+  const [statusText, setStatusText] = useState<"UP" | "DOWN" | "UNKNOWN">("UNKNOWN");
+  const okCount = samples.filter(s => s.ok).length;
+  const failCount = samples.length - okCount;
+  const lastMs = samples.at(-1)?.ms ?? 0;
+  const avgMs = samples.length ? Math.round(samples.reduce((a, b) => a + b.ms, 0) / samples.length) : 0;
+  const uptimePct = samples.length ? Math.round((okCount / samples.length) * 100) : 0;
+  const ticking = useRef<NodeJS.Timeout | null>(null);
 
-  const timedFetch = async (input: RequestInfo, init?: RequestInit) => {
-    const start = performance.now();
+  // Format time label
+  const nowLabel = () => new Date().toLocaleTimeString([], { hour12: false });
+
+  // One unified ping that also times the call
+  async function timedFetch(path: string, init?: RequestInit) {
+    const t0 = performance.now();
     try {
-      const r = await fetch(input, { cache: "no-store", ...init });
-      const ok = r.ok;
-      try {
-        // small read to close the body quickly
-        await r.clone().json().catch(() => r.text().catch(() => ""));
-      } catch {}
-      return { ok, ms: Math.round(performance.now() - start) };
+      const r = await fetch(path, { cache: "no-store", ...init });
+      const ms = Math.max(1, Math.round(performance.now() - t0));
+      return { ok: r.ok, ms, resp: r };
     } catch {
-      return { ok: false, ms: Math.round(performance.now() - start) };
+      const ms = Math.max(1, Math.round(performance.now() - t0));
+      return { ok: false, ms, resp: null };
     }
-  };
+  }
 
+  // Poll every 5s
   useEffect(() => {
-    let mounted = true;
-
-    const tick = async () => {
-      // status ping
-      const ping = await timedFetch("/api/metrics-overview");
-      if (!mounted) return;
-
-      const label = new Date().toLocaleTimeString(undefined, { hour12: false });
-      setSeries((prev) => [...prev, { t: label, ms: ping.ms, ok: ping.ok }].slice(-30));
-      if (ping.ok) good.current += 1; else bad.current += 1;
-
-      // endpoint benchmarks
-      const results: { key: string; label: string; ms: number; ok: boolean }[] = [];
-      for (const ep of ENDPOINTS) {
-        const r = await timedFetch(ep.url, {
-          method: ep.method as "GET" | "POST",
-          headers: ep.method === "POST" ? { "content-type": "application/json" } : undefined,
-          body: ep.body ?? undefined,
-        });
-        results.push({ key: ep.key, label: ep.label, ms: r.ms, ok: r.ok });
+    const poll = async () => {
+      // 1) main overview proxy
+      const o = await timedFetch("/api/metrics-overview");
+      if (o.resp) {
+        try {
+          const data = (await o.resp.json()) as Overview;
+          setOv(data);
+          const st: "UP" | "DOWN" | "UNKNOWN" =
+            data.ok ? "UP" : data.backend === "down" ? "DOWN" : "UNKNOWN";
+          setStatusText(st);
+        } catch {}
       }
-      if (!mounted) return;
-      setBench(results);
+      // 2) also time the individual proxies/endpoints you actually use
+      const eda = await timedFetch("/api/eda/aspects");
+      const search = await timedFetch("/api/search", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "camera", k: 1 })
+      });
+
+      setEndpoint([
+        { name: "eda/aspects", ms: eda.ms, ok: eda.ok },
+        { name: "search", ms: search.ms, ok: search.ok },
+      ]);
+
+      // push sample
+      setSamples(prev => {
+        const nxt = [...prev, { t: nowLabel(), ms: o.ms, ok: o.ok }];
+        // keep last 16
+        return nxt.slice(-16);
+      });
     };
 
-    tick();
-    const id = setInterval(tick, 5000);
-    return () => { mounted = false; clearInterval(id); };
+    // run immediately, then every 5s
+    poll();
+    ticking.current = setInterval(poll, 5000);
+    return () => { if (ticking.current) clearInterval(ticking.current); };
   }, []);
 
-  const latest = series.at(-1);
-  const alive = latest?.ok ?? false;
-
-  const avgLatency = useMemo(() => {
-    if (!series.length) return 0;
-    return Math.round(series.reduce((a, b) => a + b.ms, 0) / series.length);
-  }, [series]);
-
-  const uptimePct = useMemo(() => {
-    const g = good.current, b = bad.current, total = g + b;
-    if (!total) return 0;
-    return Math.round((g / total) * 1000) / 10;
-  }, [latest]);
-
-  const donut = [
-    { name: "OK", value: good.current },
-    { name: "FAIL", value: bad.current },
-  ];
+  const donutData = useMemo(
+    () => [{ name: "OK", value: okCount }, { name: "FAIL", value: failCount }],
+    [okCount, failCount]
+  );
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Service Dashboard</h1>
         <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            alive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+          className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            statusText === "UP" ? "bg-emerald-100 text-emerald-700"
+            : statusText === "DOWN" ? "bg-red-100 text-red-700"
+            : "bg-gray-100 text-gray-700"
           }`}
         >
-          {alive ? "Backend: UP" : "Backend: DOWN"}
+          Backend: {statusText}
         </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* headline cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="rounded-lg border p-4">
-          <div className="text-sm text-neutral-600">Latest Latency</div>
-          <div className="text-3xl font-semibold">{latest ? `${latest.ms} ms` : "—"}</div>
+          <div className="text-sm text-gray-500">Latest Latency</div>
+          <div className="text-3xl font-semibold">{lastMs} ms</div>
         </div>
         <div className="rounded-lg border p-4">
-          <div className="text-sm text-neutral-600">Average Latency (session)</div>
-          <div className="text-3xl font-semibold">{avgLatency} ms</div>
+          <div className="text-sm text-gray-500">Average Latency (session)</div>
+          <div className="text-3xl font-semibold">{avgMs} ms</div>
         </div>
         <div className="rounded-lg border p-4">
-          <div className="text-sm text-neutral-600">Uptime (this session)</div>
+          <div className="text-sm text-gray-500">Uptime (this session)</div>
           <div className="text-3xl font-semibold">{uptimePct}%</div>
         </div>
         <div className="rounded-lg border p-4">
-          <div className="text-sm text-neutral-600">Samples Collected</div>
-          <div className="text-3xl font-semibold">{series.length}</div>
+          <div className="text-sm text-gray-500">Samples Collected</div>
+          <div className="text-3xl font-semibold">{samples.length}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="rounded-lg border p-4 lg:col-span-2">
-          <div className="font-semibold mb-2">API Latency (last {series.length} pings)</div>
-          <div className="w-full h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={series}>
-                <XAxis dataKey="t" tick={{ fontSize: 10, fill: "#525252" }} />
-                <YAxis tick={{ fontSize: 10, fill: "#525252" }} />
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Latency line */}
+        <div className="rounded-lg border p-4">
+          <div className="mb-2 font-semibold">API Latency (last 16 pings)</div>
+          <div className="h-56">
+            <ResponsiveContainer>
+              <LineChart data={samples}>
+                <XAxis dataKey="t" hide />
+                <YAxis domain={[0, "dataMax + 100"]} />
                 <Tooltip />
-                <Line type="monotone" dataKey="ms" stroke="#111827" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="ms" stroke={NEU} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
+        {/* Success vs Fail donut */}
         <div className="rounded-lg border p-4">
-          <div className="font-semibold mb-2">Success vs Failure</div>
-          <div className="w-full h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="mb-2 font-semibold">Success vs Failure</div>
+          <div className="h-56">
+            <ResponsiveContainer>
               <PieChart>
-                <Pie data={donut} dataKey="value" nameKey="name" innerRadius={60} outerRadius={90} isAnimationActive={false}>
-                  <Cell fill="#22c55e" />
-                  <Cell fill="#ef4444" />
+                <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={90}>
+                  <Cell fill={OK} />
+                  <Cell fill={BAD} />
                 </Pie>
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="text-xs text-neutral-600">OK: {donut[0].value} • FAIL: {donut[1].value}</div>
+          <div className="text-xs text-gray-600 mt-2">
+            OK: {okCount} • FAIL: {failCount}
+          </div>
         </div>
       </div>
 
+      {/* Endpoint bars (latest) */}
       <div className="rounded-lg border p-4">
-        <div className="font-semibold mb-2">Endpoint Latency (latest)</div>
-        <div className="w-full h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={bench}>
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#525252" }} />
-              <YAxis tick={{ fontSize: 10, fill: "#525252" }} />
+        <div className="mb-2 font-semibold">Endpoint Latency (latest)</div>
+        <div className="h-56">
+          <ResponsiveContainer>
+            <BarChart data={endpoint}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
               <Tooltip />
-              <Bar dataKey="ms" isAnimationActive={false}>
-                {bench.map((b) => (
-                  <Cell key={b.key} fill={b.ok ? "#111827" : "#ef4444"} />
+              <Bar
+                dataKey="ms"
+                radius={[6, 6, 0, 0]}
+                // red if non-200
+                fill={NEU}
+              >
+                {endpoint.map((e, i) => (
+                  <Cell key={i} fill={e.ok ? NEU : BAD} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="text-xs text-neutral-600">Red bars = non-200 responses.</div>
+        <div className="text-xs text-gray-500 mt-1">Red bars = non-200 responses.</div>
       </div>
+
+      {/* Optional note about synthesized stats */}
+      {ov?.synthesized && (
+        <div className="text-xs text-amber-600">
+          Using synthesized metrics (backend doesn’t expose /admin/stats).
+        </div>
+      )}
     </div>
   );
 }
