@@ -1,6 +1,6 @@
 // src/app/api/search/route.ts
 import { NextResponse } from "next/server";
-import { API_BASE } from "@/src/lib/config";
+import { API_BASE } from "@/lib/config";
 
 export async function POST(req: Request) {
   try {

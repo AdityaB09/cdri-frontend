@@ -2,8 +2,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import EDAChartBubble, { BubbleDatum } from "@/src/components/EDAChartBubble";
-import EDAChartPainPoints, { PainPointDatum } from "@/src/components/EDAChartPainPoints";
+import EDAChartBubble, { BubbleDatum } from "@/components/EDAChartBubble";
+import EDAChartPainPoints, { PainPointDatum } from "@/components/EDAChartPainPoints";
 
 type RawRow =
   | { aspect: string; mentions: number; avg_sentiment: number }

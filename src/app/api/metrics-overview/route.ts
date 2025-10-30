@@ -1,6 +1,6 @@
 // src/app/api/metrics-overview/route.ts
 import { NextResponse } from "next/server";
-import { API_BASE } from "@/src/lib/config";
+import { API_BASE } from "@/lib/config";
 
 export async function GET() {
   try {
