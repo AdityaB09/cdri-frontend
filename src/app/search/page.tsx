@@ -50,9 +50,9 @@ export default function SearchPage() {
           {hits.map((h, i) => (
             <ReviewCard key={i} text={h.text} score={h.score} />
           ))}
-        </div>
+        {/* </div>
         <SimilarPanel items={hits} />
-      </div>
+      </div> */}
     </div>
   );
 }
