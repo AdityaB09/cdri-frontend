@@ -1,42 +1,33 @@
-// frontend/src/app/eda/page.tsx
 "use client";
 import { useEffect, useState } from "react";
-
-type Row = { aspect: string; mentions: number; avg_sentiment: number };
+import { apiEdaAspects, type EdaAspect } from "@/api";
+import EDAChartBubble from "@/components/EDACartBubble";     // your bubble component
+import EDAChartPainPoints from "@/components/EDACartPainPoints"; // your bar component
 
 export default function EdaPage() {
-  const [rows, setRows] = useState<Row[]>([]);
+  const [items, setItems] = useState<EdaAspect[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch("/api/eda/aspects", { cache: "no-store" });
-        if (!r.ok) throw new Error(await r.text());
-        const data = await r.json();
-        setRows(data.aspects ?? []);
-      } catch (e: any) {
-        setErr(e.message ?? "Failed to load");
-      }
-    })();
+    apiEdaAspects().then(r => setItems(r.items)).catch(e => setErr(String(e)));
   }, []);
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Aspect Intelligence</h1>
-      {err && <div className="text-sm text-red-600">{err}</div>}
-      <div className="rounded border bg-white">
-        <div className="grid grid-cols-3 text-xs uppercase tracking-wide text-neutral-500 border-b px-4 py-2">
-          <div>Aspect</div><div className="text-right">Mentions</div><div className="text-right">Avg sentiment</div>
-        </div>
-        {rows.map((r, i) => (
-          <div key={i} className="grid grid-cols-3 border-b last:border-b-0 px-4 py-2">
-            <div className="font-medium">{r.aspect}</div>
-            <div className="text-right">{r.mentions}</div>
-            <div className="text-right">{r.avg_sentiment.toFixed(2)}</div>
-          </div>
-        ))}
-      </div>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">Insights</h1>
+      {err && <pre className="text-red-600 text-sm">{err}</pre>}
+      {!err && (
+        <>
+          <section>
+            <h2 className="font-semibold mb-2">Top Pain Points (impact)</h2>
+            <EDAChartPainPoints data={items.map(i=>({ aspect: i.aspect, avg_sentiment: i.avg_sentiment, mentions: i.mentions }))}/>
+          </section>
+          <section>
+            <h2 className="font-semibold mb-2">Aspect Bubble Map</h2>
+            <EDAChartBubble data={items}/>
+          </section>
+        </>
+      )}
     </div>
   );
 }

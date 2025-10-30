@@ -1,34 +1,20 @@
-// frontend/src/app/layout.tsx
 import "./styles/globals.css";
-import type { ReactNode } from "react";
+import Link from "next/link";
 
-export const metadata = {
-  title: "CDRI",
-  description: "Cross-Domain Review Intelligence",
-};
-
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50 text-gray-900">
+      <body className="bg-neutral-50 text-neutral-900">
         <header className="border-b bg-white">
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-            <div className="text-lg font-semibold tracking-tight text-gray-900">
-              CDRI
-              <span className="ml-2 text-xs font-normal text-gray-500">
-                Review Intelligence
-              </span>
-            </div>
-            <nav className="flex gap-4 text-sm font-medium text-gray-700">
-              <a className="hover:text-black" href="/">Home</a>
-              <a className="hover:text-black" href="/dashboard">Dashboard</a>
-              <a className="hover:text-black" href="/search">Search</a>
-              <a className="hover:text-black" href="/explain">Explain</a>
-              <a className="hover:text-black" href="/eda">Insights</a>
-            </nav>
-          </div>
+          <nav className="mx-auto max-w-6xl px-4 h-12 flex items-center gap-6">
+            <Link href="/" className="font-semibold">CDRI</Link>
+            <Link href="/dashboard">Dashboard</Link>
+            <Link href="/search">Search</Link>
+            <Link href="/explain">Explain</Link>
+            <Link href="/eda">Insights</Link>
+          </nav>
         </header>
-        <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
       </body>
     </html>
   );

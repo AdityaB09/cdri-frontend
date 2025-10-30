@@ -1,39 +1,40 @@
-// e.g., src/app/explain/page.tsx (client component)
 "use client";
 import { useState } from "react";
-import { postJSON } from "@/lib/api";
+import { apiExplain, type ExplainRes } from "@/api";
+import ABSAHeatmap from "@/components/ABSAHeatmap";
 
 export default function ExplainPage() {
-  const [text, setText] = useState("");
-  const [resp, setResp] = useState<any>(null);
+  const [text, setText] = useState("The camera is amazing but the speaker crackles and it overheats");
+  const [res, setRes] = useState<ExplainRes | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  async function runExplain(e: React.FormEvent) {
-    e.preventDefault();
-    setErr(null);
-    setResp(null);
-    try {
-      const data = await postJSON("/api/explain-review", { text });
-      setResp(data);
-    } catch (e: any) {
-      setErr(e.message);
-    }
+  async function onExplain() {
+    setLoading(true); setErr(null);
+    try { setRes(await apiExplain({ text })); }
+    catch (e:any) { setErr(e.message); }
+    finally { setLoading(false); }
   }
 
   return (
-    <main className="p-6 max-w-3xl mx-auto">
-      <form onSubmit={runExplain} className="flex flex-col gap-2">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Paste a review…"
-          className="border px-3 py-2 rounded w-full h-32"
-        />
-        <button className="px-4 py-2 rounded bg-black text-white w-fit">Explain</button>
-      </form>
-
-      {err && <pre className="mt-4 text-red-600 text-sm whitespace-pre-wrap">{err}</pre>}
-      {resp && <pre className="mt-4 text-xs bg-gray-50 border p-3 rounded">{JSON.stringify(resp, null, 2)}</pre>}
-    </main>
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold">Explain</h1>
+      <textarea className="w-full rounded border px-3 py-2 h-32" value={text} onChange={e=>setText(e.target.value)}/>
+      <button onClick={onExplain} className="rounded bg-black text-white px-4 py-2">Explain</button>
+      {loading && <div className="text-sm text-neutral-500">Running…</div>}
+      {err && <pre className="text-red-600 text-sm">{err}</pre>}
+      {res && (
+        <div className="grid gap-4">
+          <section>
+            <h2 className="text-lg font-semibold mb-2">Aspect Intelligence</h2>
+            <ABSAHeatmap aspects={res.aspects}/>
+          </section>
+          <section>
+            <h3 className="font-semibold mb-1">Token Attributions</h3>
+            <pre className="bg-neutral-50 border rounded p-3 text-sm">{JSON.stringify(res.tokens, null, 2)}</pre>
+          </section>
+        </div>
+      )}
+    </div>
   );
 }
