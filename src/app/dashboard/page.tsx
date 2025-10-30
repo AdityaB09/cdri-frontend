@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiMetrics, apiHealth, type MetricsRes } from "@/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/card"; // your card.tsx file
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // your card.tsx file
 
 export default function DashboardPage() {
   const [m, setM] = useState<MetricsRes | null>(null);

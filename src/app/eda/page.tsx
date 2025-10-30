@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiEdaAspects, type EdaAspect } from "@/api";
-import EDAChartBubble from "@/components/EDACartBubble";     // your bubble component
-import EDAChartPainPoints from "@/components/EDACartPainPoints"; // your bar component
+import EDAChartBubble from "@/components/EDAChartBubble";     // your bubble component
+import EDAChartPainPoints from "@/components/EDAChartPainPoints"; // your bar component
 
 export default function EdaPage() {
   const [items, setItems] = useState<EdaAspect[]>([]);
