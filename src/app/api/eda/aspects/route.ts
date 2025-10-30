@@ -1,9 +1,9 @@
-import { BACKEND_URL } from "@/lib/config";
+import {  NEXT_PUBLIC_API_BASE} from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const r = await fetch(`${BACKEND_URL}/eda/aspects`, {
+  const r = await fetch(`${NEXT_PUBLIC_API_BASE}/eda/aspects`, {
     method: "GET",
     cache: "no-store",
   });
