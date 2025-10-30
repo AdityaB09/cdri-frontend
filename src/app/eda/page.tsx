@@ -1,60 +1,73 @@
-// src/app/eda/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { API_BASE } from "@/lib/config";
+import AspectTable, { AspectRow } from "@/components/AspectTable";
 import EDAChartBubble, { BubbleDatum } from "@/components/EDAChartBubble";
 import EDAChartPainPoints, { PainPointDatum } from "@/components/EDAChartPainPoints";
-import AspectTable from "@/components/AspectTable";
 
-type EdaResp = { aspects: { aspect: string; mentions: number; avg_sentiment: number }[] };
+type ApiAspectsResponse = {
+  aspects: { aspect: string; mentions: number; avg_sentiment: number }[];
+};
 
 export default function EdaPage() {
-  const [rows, setRows] = useState<BubbleDatum[]>([]);
-  const [err, setErr] = useState<string | null>(null);
+  const [rows, setRows] = useState<AspectRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
+    const run = async () => {
       try {
-        const r = await fetch(`${API_BASE}/api/eda/aspects`);
-        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-        const j = (await r.json()) as EdaResp;
-        setRows(j.aspects || []);
+        setLoading(true);
+        setErr(null);
+        const res = await fetch("/api/eda/aspects", { cache: "no-store" });
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const data: ApiAspectsResponse = await res.json();
+        const norm = (data.aspects ?? []).map((a) => ({
+          aspect: a.aspect,
+          mentions: a.mentions,
+          avg_sentiment: a.avg_sentiment,
+        }));
+        setRows(norm);
       } catch (e: any) {
-        setErr(e.message);
+        setErr(e?.message ?? "failed");
       } finally {
         setLoading(false);
       }
-    })();
+    };
+    run();
   }, []);
 
-  const pain: PainPointDatum[] = rows.map(r => ({
+  const bubbles: BubbleDatum[] = rows.map((r) => ({
     aspect: r.aspect,
-    avg_sentiment: r.avg_sentiment,
     mentions: r.mentions,
+    avg_sentiment: r.avg_sentiment,
+  }));
+  const bars: PainPointDatum[] = rows.map((r) => ({
+    aspect: r.aspect,
+    mentions: r.mentions,
+    avg_sentiment: r.avg_sentiment,
   }));
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold">EDA / Aspects</h1>
-      {loading && <p>Loading…</p>}
-      {err && <p className="text-red-600">{err}</p>}
-      {!loading && !err && rows.length === 0 && (
-        <p className="text-sm text-neutral-500">No aspect data yet. Ingest a few hundred reviews below.</p>
-      )}
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">Aspect Intelligence</h1>
 
-      {rows.length > 0 && (
+      {loading && <div className="text-sm text-neutral-500">Loading…</div>}
+      {err && <div className="text-sm text-red-600">{err}</div>}
+
+      {!loading && !err && (
         <>
           <AspectTable rows={rows} />
+
           <div className="grid md:grid-cols-2 gap-6">
-            <div className="border rounded-lg p-3">
+            <div className="rounded-lg border p-3">
               <h2 className="font-semibold mb-2">Frequency vs Sentiment</h2>
-              <EDAChartBubble data={rows} />
+              <EDAChartBubble data={bubbles} />
             </div>
-            <div className="border rounded-lg p-3">
-              <h2 className="font-semibold mb-2">Top Pain / Wins</h2>
-              <EDAChartPainPoints data={pain} />
+
+            <div className="rounded-lg border p-3">
+              <h2 className="font-semibold mb-2">Top Pain / Gain</h2>
+              <EDAChartPainPoints data={bars} />
             </div>
           </div>
         </>

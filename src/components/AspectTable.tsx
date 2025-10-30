@@ -1,68 +1,48 @@
 "use client";
 
-type Aspect = {
+import React from "react";
+
+export type AspectRow = {
   aspect: string;
-  sentiment: string; // "positive" | "negative" | "neutral"
-  score: number; // 0..1 confidence-ish
+  mentions: number;        // aka count
+  avg_sentiment: number;   // -1..1
 };
 
-export default function AspectTable({ aspects }: { aspects: Aspect[] }) {
-  if (!aspects || aspects.length === 0) {
+type Props =
+  | { aspects: AspectRow[]; rows?: never }
+  | { rows: AspectRow[]; aspects?: never };
+
+export default function AspectTable(props: Props) {
+  const data: AspectRow[] = ("aspects" in props ? props.aspects : props.rows) ?? [];
+
+  if (!data.length) {
     return (
-      <div className="text-sm text-gray-500">
-        No aspects detected yet. Paste a review and click Run.
+      <div className="rounded-lg border p-4 text-sm text-neutral-500">
+        No aspect data yet.
       </div>
     );
   }
 
   return (
-    <div className="flex flex-wrap gap-4">
-      {aspects.map((a, i) => (
-        <div
-          key={i}
-          className="rounded-lg border border-gray-200 bg-white shadow-sm p-4 w-60"
-        >
-          <div className="text-sm font-semibold text-gray-800">
-            {a.aspect}
-          </div>
-
-          <div className="mt-1 text-xs text-gray-600">
-            Sentiment:{" "}
-            <span
-              className={
-                a.sentiment === "negative"
-                  ? "text-red-600 font-medium"
-                  : a.sentiment === "positive"
-                  ? "text-green-600 font-medium"
-                  : "text-gray-600 font-medium"
-              }
-            >
-              {a.sentiment}
-            </span>
-          </div>
-
-          <div className="mt-3">
-            <div className="h-2 w-full bg-gray-100 rounded">
-              <div
-                className={
-                  "h-2 rounded " +
-                  (a.sentiment === "negative"
-                    ? "bg-red-400"
-                    : a.sentiment === "positive"
-                    ? "bg-green-400"
-                    : "bg-gray-400")
-                }
-                style={{
-                  width: `${Math.min(a.score * 100, 100)}%`,
-                }}
-              />
-            </div>
-            <div className="text-[10px] text-gray-500 mt-1">
-              confidence {Math.round(a.score * 100)}%
-            </div>
-          </div>
-        </div>
-      ))}
+    <div className="overflow-x-auto rounded-lg border">
+      <table className="min-w-full text-sm">
+        <thead className="bg-neutral-50 text-neutral-600">
+          <tr>
+            <th className="px-4 py-2 text-left">Aspect</th>
+            <th className="px-4 py-2 text-right">Mentions</th>
+            <th className="px-4 py-2 text-right">Avg Sentiment</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((r) => (
+            <tr key={r.aspect} className="border-t">
+              <td className="px-4 py-2">{r.aspect}</td>
+              <td className="px-4 py-2 text-right">{r.mentions}</td>
+              <td className="px-4 py-2 text-right">{r.avg_sentiment.toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
