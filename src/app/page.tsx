@@ -12,9 +12,8 @@ export default function Home() {
         Explain model decisions.
       </p>
 
-      {/* Cards */}
-      <div className="mt-8 grid gap-6 md:grid-cols-3">
-        {/* Dashboard */}
+      {/* 2×2 layout: single column on xs, two columns from sm and up */}
+      <div className="mt-8 grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 max-w-5xl">
         <Link
           href="/dashboard"
           className="block rounded-2xl border hover:shadow-md transition-shadow bg-white p-6"
@@ -25,7 +24,6 @@ export default function Home() {
           </p>
         </Link>
 
-        {/* Similar Experiences */}
         <Link
           href="/search"
           className="block rounded-2xl border hover:shadow-md transition-shadow bg-white p-6"
@@ -36,7 +34,6 @@ export default function Home() {
           </p>
         </Link>
 
-        {/* Explain */}
         <Link
           href="/explain"
           className="block rounded-2xl border hover:shadow-md transition-shadow bg-white p-6"
@@ -47,10 +44,9 @@ export default function Home() {
           </p>
         </Link>
 
-        {/* NEW: Insights (EDA) — this will appear BELOW the first 3 on md+ screens */}
         <Link
           href="/eda"
-          className="block rounded-2xl border hover:shadow-md transition-shadow bg-white p-6 justify-center"
+          className="block rounded-2xl border hover:shadow-md transition-shadow bg-white p-6"
         >
           <h2 className="text-2xl font-semibold">Insights (EDA)</h2>
           <p className="mt-2 text-neutral-600">
