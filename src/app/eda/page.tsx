@@ -2,73 +2,61 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { API_BASE } from "../api";
 import EDAChartBubble, { BubbleDatum } from "@/components/EDAChartBubble";
 import EDAChartPainPoints, { PainPointDatum } from "@/components/EDAChartPainPoints";
+import AspectTable from "@/components/AspectTable";
 
-type RawRow =
-  | { aspect: string; mentions: number; avg_sentiment: number }
-  | { aspect: string; count: number; total_sentiment: number };
+type EdaResp = { aspects: { aspect: string; mentions: number; avg_sentiment: number }[] };
 
-export default function EDAPage() {
-  const [rows, setRows] = useState<RawRow[]>([]);
+export default function EdaPage() {
+  const [rows, setRows] = useState<BubbleDatum[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        setLoading(true);
-        const r = await fetch("/api/eda/aspects", { cache: "no-store" });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data?.error || "EDA fetch failed");
-        setRows(Array.isArray(data) ? data : data?.items ?? []);
+        const r = await fetch(`${API_BASE}/api/eda/aspects`);
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+        const j = (await r.json()) as EdaResp;
+        setRows(j.aspects || []);
       } catch (e: any) {
-        setErr(e.message ?? "EDA error");
+        setErr(e.message);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  const normalized: BubbleDatum[] = rows.map((r: any) => {
-    if ("mentions" in r && "avg_sentiment" in r) {
-      return { aspect: r.aspect, mentions: r.mentions, avg_sentiment: r.avg_sentiment };
-    }
-    // adapter for { count, total_sentiment }
-    const mentions = r.count ?? 0;
-    const avg_sentiment =
-      mentions > 0 ? (r.total_sentiment ?? 0) / mentions : 0;
-    return { aspect: r.aspect, mentions, avg_sentiment };
-  });
-
-  const pain: PainPointDatum[] = normalized.map((d) => ({
-    aspect: d.aspect,
-    avg_sentiment: d.avg_sentiment,
-    mentions: d.mentions,
+  const pain: PainPointDatum[] = rows.map(r => ({
+    aspect: r.aspect,
+    avg_sentiment: r.avg_sentiment,
+    mentions: r.mentions,
   }));
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-3xl font-bold">Aspect Intelligence</h1>
-
-      {loading && <div>Loading…</div>}
-      {err && <div className="text-red-600">{err}</div>}
-
-      {!loading && !err && normalized.length === 0 && (
-        <div className="text-neutral-500">No data yet. Ingest some reviews to light this up.</div>
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
+      <h1 className="text-2xl font-bold">EDA / Aspects</h1>
+      {loading && <p>Loading…</p>}
+      {err && <p className="text-red-600">{err}</p>}
+      {!loading && !err && rows.length === 0 && (
+        <p className="text-sm text-neutral-500">No aspect data yet. Ingest a few hundred reviews below.</p>
       )}
 
-      {!loading && !err && normalized.length > 0 && (
+      {rows.length > 0 && (
         <>
-          <section className="rounded-xl border p-4">
-            <h2 className="text-lg font-semibold mb-3">Pain vs. Delight (bubble)</h2>
-            <EDAChartBubble data={normalized} />
-          </section>
-
-          <section className="rounded-xl border p-4">
-            <h2 className="text-lg font-semibold mb-3">Top Pain / Delight (bars)</h2>
-            <EDAChartPainPoints data={pain} />
-          </section>
+          <AspectTable rows={rows} />
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="border rounded-lg p-3">
+              <h2 className="font-semibold mb-2">Frequency vs Sentiment</h2>
+              <EDAChartBubble data={rows} />
+            </div>
+            <div className="border rounded-lg p-3">
+              <h2 className="font-semibold mb-2">Top Pain / Wins</h2>
+              <EDAChartPainPoints data={pain} />
+            </div>
+          </div>
         </>
       )}
     </div>
