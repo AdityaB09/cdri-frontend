@@ -2,77 +2,62 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-
-// Recharts (dynamic to avoid SSR issues)
-const LineChart = dynamic(() => import("recharts").then(m => m.LineChart), { ssr: false });
-const Line = dynamic(() => import("recharts").then(m => m.Line), { ssr: false });
-const XAxis = dynamic(() => import("recharts").then(m => m.XAxis), { ssr: false });
-const YAxis = dynamic(() => import("recharts").then(m => m.YAxis), { ssr: false });
-const Tooltip = dynamic(() => import("recharts").then(m => m.Tooltip), { ssr: false });
-const ResponsiveContainer = dynamic(() => import("recharts").then(m => m.ResponsiveContainer), { ssr: false });
-const PieChart = dynamic(() => import("recharts").then(m => m.PieChart), { ssr: false });
-const Pie = dynamic(() => import("recharts").then(m => m.Pie), { ssr: false });
-const Cell = dynamic(() => import("recharts").then(m => m.Cell), { ssr: false });
-const BarChart = dynamic(() => import("recharts").then(m => m.BarChart), { ssr: false });
-const Bar = dynamic(() => import("recharts").then(m => m.Bar), { ssr: false });
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+} from "recharts";
 
 type PingSample = { t: string; ms: number; ok: boolean };
 
 const ENDPOINTS = [
   { key: "metrics", label: "metrics-overview", method: "GET", url: "/api/metrics-overview", body: null },
-  { key: "aspects", label: "eda/aspects", method: "GET", url: "/api/eda/aspects", body: null },
-  { key: "search",  label: "search", method: "POST", url: "/api/search", body: JSON.stringify({ query: "camera", k: 1 }) },
+  { key: "aspects", label: "eda/aspects",      method: "GET", url: "/api/eda/aspects",       body: null },
+  { key: "search",  label: "search",            method: "POST", url: "/api/search",            body: JSON.stringify({ query: "camera", k: 1 }) },
 ];
 
 export default function DashboardPage() {
-  // live ping series
   const [series, setSeries] = useState<PingSample[]>([]);
-  // totals for donut & uptime
   const good = useRef(0);
   const bad = useRef(0);
-  // last endpoint benchmark
   const [bench, setBench] = useState<{ key: string; label: string; ms: number; ok: boolean }[]>([]);
 
-  // Ping one endpoint and measure latency
   const timedFetch = async (input: RequestInfo, init?: RequestInit) => {
     const start = performance.now();
     try {
       const r = await fetch(input, { cache: "no-store", ...init });
       const ok = r.ok;
-      // Try to read body quickly (avoid large payload cost)
-      try { await r.clone().json().catch(() => r.text().catch(() => "")); } catch {}
-      const ms = Math.max(0, Math.round(performance.now() - start));
-      return { ok, ms };
+      try {
+        // small read to close the body quickly
+        await r.clone().json().catch(() => r.text().catch(() => ""));
+      } catch {}
+      return { ok, ms: Math.round(performance.now() - start) };
     } catch {
-      const ms = Math.max(0, Math.round(performance.now() - start));
-      return { ok: false, ms };
+      return { ok: false, ms: Math.round(performance.now() - start) };
     }
   };
 
-  // Every 5s: ping /api/metrics-overview for status + latency, and benchmark all three endpoints
   useEffect(() => {
     let mounted = true;
 
     const tick = async () => {
-      // Status ping
+      // status ping
       const ping = await timedFetch("/api/metrics-overview");
       if (!mounted) return;
 
-      const stamp = new Date();
-      const label =
-        stamp.toLocaleTimeString(undefined, { hour12: false })
-        .split(" ")[0];
-
-      setSeries((prev) => {
-        const next = [...prev, { t: label, ms: ping.ms, ok: ping.ok }];
-        // keep last 30 points
-        return next.slice(-30);
-      });
-
+      const label = new Date().toLocaleTimeString(undefined, { hour12: false });
+      setSeries((prev) => [...prev, { t: label, ms: ping.ms, ok: ping.ok }].slice(-30));
       if (ping.ok) good.current += 1; else bad.current += 1;
 
-      // Endpoint benchmark (run sequentially to avoid overloading)
+      // endpoint benchmarks
       const results: { key: string; label: string; ms: number; ok: boolean }[] = [];
       for (const ep of ENDPOINTS) {
         const r = await timedFetch(ep.url, {
@@ -86,53 +71,43 @@ export default function DashboardPage() {
       setBench(results);
     };
 
-    // initial + interval
     tick();
     const id = setInterval(tick, 5000);
     return () => { mounted = false; clearInterval(id); };
   }, []);
 
-  // Derived metrics
   const latest = series.at(-1);
   const alive = latest?.ok ?? false;
+
   const avgLatency = useMemo(() => {
-    if (series.length === 0) return 0;
-    const sum = series.reduce((a, b) => a + b.ms, 0);
-    return Math.round(sum / series.length);
+    if (!series.length) return 0;
+    return Math.round(series.reduce((a, b) => a + b.ms, 0) / series.length);
   }, [series]);
 
   const uptimePct = useMemo(() => {
-    const g = good.current;
-    const b = bad.current;
-    const total = g + b;
+    const g = good.current, b = bad.current, total = g + b;
     if (!total) return 0;
-    return Math.round((g / total) * 1000) / 10; // one decimal
-  }, [latest]); // recompute when a new ping arrives
-
-  const donut = useMemo(() => {
-    const g = good.current;
-    const b = bad.current;
-    return [
-      { name: "OK", value: g },
-      { name: "FAIL", value: b },
-    ];
+    return Math.round((g / total) * 1000) / 10;
   }, [latest]);
 
-  const donutColors = ["#22c55e", "#ef4444"]; // green / red
+  const donut = [
+    { name: "OK", value: good.current },
+    { name: "FAIL", value: bad.current },
+  ];
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <h1 className="text-3xl font-bold">Service Dashboard</h1>
-        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-          alive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-        }`}>
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+            alive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+          }`}
+        >
           {alive ? "Backend: UP" : "Backend: DOWN"}
         </span>
       </div>
 
-      {/* KPI row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="rounded-lg border p-4">
           <div className="text-sm text-neutral-600">Latest Latency</div>
@@ -152,11 +127,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Latency Trend */}
         <div className="rounded-lg border p-4 lg:col-span-2">
-          <div className="font-semibold mb-2">API Latency (last {series.length || 0} pings)</div>
+          <div className="font-semibold mb-2">API Latency (last {series.length} pings)</div>
           <div className="w-full h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={series}>
@@ -169,37 +142,25 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Success vs Failure */}
         <div className="rounded-lg border p-4">
           <div className="font-semibold mb-2">Success vs Failure</div>
           <div className="w-full h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={donut}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={60}
-                  outerRadius={90}
-                  isAnimationActive={false}
-                >
-                  {donut.map((entry, i) => (
-                    <Cell key={entry.name} fill={donutColors[i % donutColors.length]} />
-                  ))}
+                <Pie data={donut} dataKey="value" nameKey="name" innerRadius={60} outerRadius={90} isAnimationActive={false}>
+                  <Cell fill="#22c55e" />
+                  <Cell fill="#ef4444" />
                 </Pie>
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="text-xs text-neutral-600">
-            OK: {donut[0].value} • FAIL: {donut[1].value}
-          </div>
+          <div className="text-xs text-neutral-600">OK: {donut[0].value} • FAIL: {donut[1].value}</div>
         </div>
       </div>
 
-      {/* Endpoint Benchmarks */}
       <div className="rounded-lg border p-4">
-        <div className="font-semibold mb-2">Endpoint Latency (latest sample)</div>
+        <div className="font-semibold mb-2">Endpoint Latency (latest)</div>
         <div className="w-full h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={bench}>
@@ -207,16 +168,14 @@ export default function DashboardPage() {
               <YAxis tick={{ fontSize: 10, fill: "#525252" }} />
               <Tooltip />
               <Bar dataKey="ms" isAnimationActive={false}>
-                {bench.map((b, idx) => (
+                {bench.map((b) => (
                   <Cell key={b.key} fill={b.ok ? "#111827" : "#ef4444"} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="text-xs text-neutral-600">
-          Bars in red indicate non-200 responses.
-        </div>
+        <div className="text-xs text-neutral-600">Red bars = non-200 responses.</div>
       </div>
     </div>
   );
