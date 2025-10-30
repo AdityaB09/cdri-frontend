@@ -50,7 +50,7 @@ export default function Home() {
         {/* NEW: Insights (EDA) — this will appear BELOW the first 3 on md+ screens */}
         <Link
           href="/eda"
-          className="block rounded-2xl border hover:shadow-md transition-shadow bg-white p-6"
+          className="block rounded-2xl border hover:shadow-md transition-shadow bg-white p-6 justify-center"
         >
           <h2 className="text-2xl font-semibold">Insights (EDA)</h2>
           <p className="mt-2 text-neutral-600">
